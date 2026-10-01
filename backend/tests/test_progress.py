@@ -14,8 +14,14 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-from utils.progress import ProgressManager, get_progress_manager
-from utils.hf_progress import HFProgressTracker, create_hf_progress_callback
+import sys
+from pathlib import Path
+
+# Add repo root to path so the backend package is importable
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from backend.utils.progress import ProgressManager, get_progress_manager
+from backend.utils.hf_progress import HFProgressTracker, create_hf_progress_callback
 
 
 def test_progress_manager_basic():
@@ -139,10 +145,12 @@ def test_hf_progress_tracker():
 
             # Simulate downloading a file
             print("  Simulating download with tqdm...")
-            total_size = 1000
+            # Must be >= the tracker's 1MB MIN_TOTAL_BYTES or no progress is reported
+            total_size = 2_000_000
+            chunk_size = 200_000
             with tqdm(total=total_size, desc="model.bin", unit="B", unit_scale=True) as pbar:
-                for chunk in range(0, total_size, 100):
-                    pbar.update(100)
+                for chunk in range(0, total_size, chunk_size):
+                    pbar.update(chunk_size)
                     time.sleep(0.01)
 
             print(f"  Captured {len(captured_progress)} progress updates")
