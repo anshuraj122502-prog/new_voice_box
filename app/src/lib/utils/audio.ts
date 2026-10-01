@@ -75,22 +75,38 @@ export async function getAudioDuration(
  * This ensures compatibility without requiring ffmpeg on the backend.
  */
 export async function convertToWav(audioBlob: Blob): Promise<Blob> {
-  // Create audio context
+  const { wav } = await convertToWavWithPeak(audioBlob);
+  return wav;
+}
+
+/**
+ * Convert any audio blob to WAV and report its peak absolute sample level
+ * (0..1). A peak near 0 means the recording captured silence — e.g. the
+ * browser picked the wrong input device or the mic is muted at the OS level.
+ */
+export async function convertToWavWithPeak(
+  audioBlob: Blob,
+): Promise<{ wav: Blob; peak: number }> {
   const audioContext = new AudioContext();
+  try {
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    return { wav: audioBufferToWav(audioBuffer), peak: getPeakLevel(audioBuffer) };
+  } finally {
+    await audioContext.close();
+  }
+}
 
-  // Read blob as array buffer
-  const arrayBuffer = await audioBlob.arrayBuffer();
-
-  // Decode audio data
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-  // Convert to WAV
-  const wavBlob = audioBufferToWav(audioBuffer);
-
-  // Close audio context to free resources
-  await audioContext.close();
-
-  return wavBlob;
+function getPeakLevel(buffer: AudioBuffer): number {
+  let peak = 0;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+    const data = buffer.getChannelData(channel);
+    for (let i = 0; i < data.length; i++) {
+      const abs = Math.abs(data[i]);
+      if (abs > peak) peak = abs;
+    }
+  }
+  return peak;
 }
 
 /**

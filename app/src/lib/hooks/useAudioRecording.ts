@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePlatform } from '@/platform/PlatformContext';
-import { convertToWav } from '@/lib/utils/audio';
+import { convertToWavWithPeak } from '@/lib/utils/audio';
+
+// ~-60 dBFS: a recording that never gets louder than this is effectively
+// silence, which usually means the wrong or a muted input device.
+const SILENCE_PEAK_THRESHOLD = 0.001;
 
 interface UseAudioRecordingOptions {
   maxDurationSeconds?: number;
@@ -110,7 +114,12 @@ export function useAudioRecording({
 
         // Convert to WAV format to avoid needing ffmpeg on backend
         try {
-          const wavBlob = await convertToWav(webmBlob);
+          const { wav: wavBlob, peak } = await convertToWavWithPeak(webmBlob);
+          if (peak < SILENCE_PEAK_THRESHOLD) {
+            setError(
+              'No sound was captured. Check that the correct microphone is selected in your browser site settings and system sound settings, and that it is not muted.',
+            );
+          }
           onRecordingComplete?.(wavBlob, recordedDuration);
         } catch (err) {
           console.error('Error converting audio to WAV:', err);
